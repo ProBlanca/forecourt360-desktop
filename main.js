@@ -13,7 +13,6 @@ const path = require('path');
 const fs = require('fs');
 
 const APP_URL = 'https://omelfms.com';
-const BRAND_DARK = '#0f172a'; // matches the FMS login page's own dark navy background
 
 // Keep a persistent session partition (not "incognito") so cookies/login
 // survive app restarts, just like a normal browser profile would.
@@ -122,11 +121,13 @@ function createWindow() {
     minWidth: 1000,
     minHeight: 650,
     icon: path.join(__dirname, 'build', 'icon.png'),
-    backgroundColor: BRAND_DARK,
+    backgroundColor: '#ffffff',
     title: 'Forecourt 360',
-    // On Mac, drop the separate light-gray title bar strip so the window
-    // reads as one continuous surface with the app's own dark header,
-    // instead of a mismatched white bar sitting on top of a navy one.
+    // On Mac, drop the separate light-gray title bar strip so the
+    // traffic-light buttons float directly over the page instead of
+    // sitting in their own bar above it. The page itself is untouched -
+    // see the small padding-top added below, just enough so the buttons
+    // don't overlap clickable content.
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 14 } }
       : {}),
@@ -150,14 +151,14 @@ function createWindow() {
   mainWindow.loadURL(APP_URL);
 
   mainWindow.webContents.on('did-finish-load', () => {
-    // Push page content down slightly on Mac so it doesn't sit under the
-    // traffic-light buttons now that the separate title bar strip is gone,
-    // and force the reserved strip to the brand's own navy so it blends in
-    // instead of showing through as a plain white gap on pages that don't
-    // set their own <body> background.
+    // Reserve just enough space at the top on Mac so the traffic-light
+    // buttons (close/minimize/zoom) don't sit on top of clickable page
+    // content, now that the separate native title bar strip is hidden.
+    // This only adds spacing - it does not change any page colors, so the
+    // app looks exactly like the real site otherwise.
     if (process.platform === 'darwin') {
       mainWindow.webContents.insertCSS(
-        `html, body { background-color: ${BRAND_DARK} !important; } body { padding-top: 28px !important; }`
+        'body { padding-top: 28px !important; }'
       ).catch(() => {});
     }
 
