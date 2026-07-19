@@ -195,6 +195,41 @@ function createWindow() {
       `).catch(() => {});
     }
 
+    // Visible refresh button (both platforms). Reload already works via
+    // Cmd/Ctrl+R or the File menu, but that menu lives in the system menu
+    // bar at the very top of the screen - easy to miss, especially with
+    // the window's own title bar hidden on Mac. This floating button in
+    // the bottom-right corner makes "get the latest data" obvious: the
+    // app is just showing the live site, so a reload is exactly like
+    // pressing refresh in a browser tab - it pulls whatever is newest on
+    // the server (new requests, new approvals, etc.) right away.
+    mainWindow.webContents.executeJavaScript(`
+      (function() {
+        var id = '__fc360_reload_btn__';
+        if (document.getElementById(id)) return;
+        var btn = document.createElement('button');
+        btn.id = id;
+        btn.title = 'Reload (get latest data)';
+        btn.innerHTML = '&#8635;';
+        btn.style.position = 'fixed';
+        btn.style.bottom = '20px';
+        btn.style.right = '20px';
+        btn.style.width = '46px';
+        btn.style.height = '46px';
+        btn.style.borderRadius = '50%';
+        btn.style.border = 'none';
+        btn.style.background = '#11305c';
+        btn.style.color = '#ffffff';
+        btn.style.fontSize = '22px';
+        btn.style.lineHeight = '1';
+        btn.style.cursor = 'pointer';
+        btn.style.boxShadow = '0 4px 14px rgba(0,0,0,.35)';
+        btn.style.zIndex = '2147483647';
+        btn.onclick = function () { window.location.reload(); };
+        document.documentElement.appendChild(btn);
+      })();
+    `).catch(() => {});
+
     // Only inject the auto-fill helper on the actual login page.
     try {
       const currentUrl = new URL(mainWindow.webContents.getURL());
