@@ -1,0 +1,54 @@
+name: Build & Publish Desktop Installers
+
+# Triggers whenever you push a version tag, e.g.:
+#   git tag v1.0.0
+#   git push origin v1.0.0
+#
+# Uses GitHub's free hosted runners (windows-latest, macos-latest) to build
+# the Windows .exe and Mac .dmg, then has electron-builder publish both
+# straight to a GitHub Release (including the small metadata files
+# electron-updater needs to detect new versions). No paid build or update
+# service is involved - GITHUB_TOKEN below is the automatic token GitHub
+# Actions provides for free, not a personal secret you need to create.
+#
+# You can also trigger it manually from the repo's Actions tab ("Run workflow").
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # required so electron-builder can create/attach the GitHub Release
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Build & publish Windows installer (.exe)
+        run: npm run publish:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Build & publish Mac installer (.dmg) - unsigned, no Apple Developer account needed
+        run: npm run publish:mac
+        env:
+          # Tells electron-builder not to look for a paid Apple code-signing
+          # identity. The resulting .dmg is unsigned/unnotarized, which is
+          # why users must right-click -> Open the first time (Gatekeeper).
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
