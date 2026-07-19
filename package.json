@@ -1,7 +1,7 @@
 {
   "name": "forecourt360-desktop",
   "productName": "Forecourt 360",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Desktop app for Forecourt 360 (OMEL FMS) - Mighty Gas Company Limited",
   "main": "main.js",
   "author": "Mighty Gas Company Limited",
@@ -56,6 +56,7 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Forecourt 360"
     },
+    "afterSign": "build/afterSign.js",
     "mac": {
       "target": [
         { "target": "dmg", "arch": ["x64", "arm64"] }

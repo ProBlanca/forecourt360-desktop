@@ -136,6 +136,14 @@ To open it:
 This is only needed once — after that, it opens normally like any other
 app, including double-click and Launchpad.
 
+The build applies a free "ad-hoc" signature (`build/afterSign.js`, using
+`codesign --sign -` — no Apple account, no certificate) specifically so
+macOS shows this normal "unidentified developer" prompt. Without it, a
+fully unsigned app can instead show the harsher **"app is damaged and
+can't be opened"** message on newer macOS versions, which has no
+right-click-to-open option. If you ever see that message, see
+Troubleshooting below.
+
 ## Auto-update (free, via GitHub Releases)
 
 `electron-updater` is wired into `main.js` and checks your GitHub repo's
