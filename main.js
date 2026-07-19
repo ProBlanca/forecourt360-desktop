@@ -154,12 +154,20 @@ function createWindow() {
     // Reserve just enough space at the top on Mac so the traffic-light
     // buttons (close/minimize/zoom) don't sit on top of clickable page
     // content, now that the separate native title bar strip is hidden.
-    // This only adds spacing - it does not change any page colors, so the
-    // app looks exactly like the real site otherwise.
+    // The sidebars (.adm-sidebar, .mgr-sidebar, .dir-sidebar, .tp-sidebar
+    // across the admin/manager/director/transport-officer layouts) are all
+    // `position: fixed; top:0`, which ignores any padding on <body> - that's
+    // why padding-top on body alone didn't move the logo out of the way.
+    // Pushing the sidebars themselves down (and shrinking their height to
+    // match, since they're all box-sizing:border-box) is what actually
+    // works. This only adds spacing - it does not change any page colors,
+    // so the app still looks exactly like the real site otherwise.
     if (process.platform === 'darwin') {
-      mainWindow.webContents.insertCSS(
-        'body { padding-top: 28px !important; }'
-      ).catch(() => {});
+      mainWindow.webContents.insertCSS(`
+        .adm-sidebar, .mgr-sidebar, .dir-sidebar, .tp-sidebar {
+          padding-top: 28px !important;
+        }
+      `).catch(() => {});
     }
 
     // Only inject the auto-fill helper on the actual login page.
