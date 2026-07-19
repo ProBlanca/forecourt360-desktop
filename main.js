@@ -168,6 +168,31 @@ function createWindow() {
           padding-top: 28px !important;
         }
       `).catch(() => {});
+
+      // With the native title bar hidden, nothing on the page is marked as
+      // a draggable region, so the window can't be moved at all unless we
+      // add one ourselves. This creates a thin, invisible strip confined to
+      // the same top-left area we already cleared above (well within every
+      // sidebar's width), so it can't cover any real button or link on any
+      // page - it only adds the ability to click-and-drag the window there,
+      // exactly like a normal title bar would.
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          var id = '__fc360_drag_region__';
+          if (document.getElementById(id)) return;
+          var el = document.createElement('div');
+          el.id = id;
+          el.style.position = 'fixed';
+          el.style.top = '0';
+          el.style.left = '0';
+          el.style.width = '220px';
+          el.style.height = '28px';
+          el.style.zIndex = '2147483647';
+          el.style.background = 'transparent';
+          el.style.webkitAppRegion = 'drag';
+          document.documentElement.appendChild(el);
+        })();
+      `).catch(() => {});
     }
 
     // Only inject the auto-fill helper on the actual login page.
