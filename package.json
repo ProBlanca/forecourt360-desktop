@@ -39,7 +39,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "YOUR_GITHUB_USERNAME",
+        "owner": "ProBlanca",
         "repo": "forecourt360-desktop"
       }
     ],
