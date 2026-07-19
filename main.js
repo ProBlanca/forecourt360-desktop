@@ -5,16 +5,101 @@
 // any FMS logic - every feature, role, and permission continues to work
 // exactly as it does in a browser, because it IS the same web app,
 // running inside a dedicated window with an app icon, desktop shortcut,
-// persistent login session, and optional auto-update.
+// persistent login session, local encrypted login auto-fill, and
+// optional auto-update.
 
-const { app, BrowserWindow, shell, Menu, session, dialog } = require('electron');
+const { app, BrowserWindow, shell, Menu, session, dialog, ipcMain, safeStorage } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 const APP_URL = 'https://omelfms.com';
+const BRAND_DARK = '#0f172a'; // matches the FMS login page's own dark navy background
 
 // Keep a persistent session partition (not "incognito") so cookies/login
 // survive app restarts, just like a normal browser profile would.
 const SESSION_PARTITION = 'persist:forecourt360';
+
+// ---- Local encrypted login auto-fill ----
+// Electron does not include Chrome's built-in password-save/autofill
+// service (that's a Google-proprietary component tied to a Google API
+// key, not available in open-source Chromium/Electron). This is a free,
+// local substitute: credentials are encrypted with the OS's own secure
+// storage (Keychain on Mac, DPAPI on Windows) via Electron's built-in
+// `safeStorage` API - nothing is ever sent anywhere, and it only works
+// on the machine that saved it.
+const CREDENTIALS_PATH = path.join(app.getPath('userData'), 'login-credentials.enc');
+
+function saveLoginCredentials(payload) {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return;
+    const enc = safeStorage.encryptString(JSON.stringify(payload));
+    fs.writeFileSync(CREDENTIALS_PATH, enc);
+  } catch (e) {
+    console.log('Could not save login credentials:', e.message);
+  }
+}
+
+function getSavedLoginCredentials() {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return null;
+    if (!fs.existsSync(CREDENTIALS_PATH)) return null;
+    const enc = fs.readFileSync(CREDENTIALS_PATH);
+    return JSON.parse(safeStorage.decryptString(enc));
+  } catch (e) {
+    return null;
+  }
+}
+
+function forgetSavedLoginCredentials() {
+  try {
+    if (fs.existsSync(CREDENTIALS_PATH)) fs.unlinkSync(CREDENTIALS_PATH);
+  } catch (e) {
+    console.log('Could not remove saved login credentials:', e.message);
+  }
+}
+
+ipcMain.handle('get-saved-login', () => getSavedLoginCredentials());
+ipcMain.on('save-login-credentials', (event, payload) => saveLoginCredentials(payload));
+ipcMain.on('forget-saved-login', () => forgetSavedLoginCredentials());
+
+// Injected only on the login page. Fills in any saved credentials, and
+// captures whatever is submitted so next time can be auto-filled too.
+const AUTOFILL_SCRIPT = `
+(function() {
+  try {
+    if (!window.forecourt360Desktop) return;
+    var emailEl = document.querySelector('input[name="email"]');
+    var stationEl = document.querySelector('input[name="station_number"]');
+    var passEl = document.querySelector('input[name="password"]');
+    var form = document.querySelector('form');
+
+    window.forecourt360Desktop.getSavedLogin().then(function (creds) {
+      if (!creds) return;
+      function fill(el, val) {
+        if (!el || !val) return;
+        el.value = val;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      fill(emailEl, creds.email);
+      fill(stationEl, creds.stationNumber);
+      fill(passEl, creds.password);
+    });
+
+    if (form) {
+      form.addEventListener('submit', function () {
+        try {
+          window.forecourt360Desktop.saveLoginOnSubmit(
+            emailEl ? emailEl.value : '',
+            stationEl ? stationEl.value : '',
+            passEl ? passEl.value : ''
+          );
+        } catch (e) {}
+      });
+    }
+  } catch (e) {}
+})();
+`;
 
 let mainWindow;
 
@@ -37,8 +122,14 @@ function createWindow() {
     minWidth: 1000,
     minHeight: 650,
     icon: path.join(__dirname, 'build', 'icon.png'),
-    backgroundColor: '#ffffff',
+    backgroundColor: BRAND_DARK,
     title: 'Forecourt 360',
+    // On Mac, drop the separate light-gray title bar strip so the window
+    // reads as one continuous surface with the app's own dark header,
+    // instead of a mismatched white bar sitting on top of a navy one.
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 14 } }
+      : {}),
     webPreferences: {
       session: ses,
       preload: path.join(__dirname, 'preload.js'),
@@ -49,7 +140,37 @@ function createWindow() {
     },
   });
 
+  // Keep the window title fixed as "Forecourt 360" - without this, Electron
+  // adopts whatever <title> the current page sets (e.g. "Omel Fms - Admin"),
+  // which changes per-page and looks inconsistent in the title bar/dock.
+  mainWindow.on('page-title-updated', (event) => {
+    event.preventDefault();
+  });
+
   mainWindow.loadURL(APP_URL);
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    // Push page content down slightly on Mac so it doesn't sit under the
+    // traffic-light buttons now that the separate title bar strip is gone,
+    // and force the reserved strip to the brand's own navy so it blends in
+    // instead of showing through as a plain white gap on pages that don't
+    // set their own <body> background.
+    if (process.platform === 'darwin') {
+      mainWindow.webContents.insertCSS(
+        `html, body { background-color: ${BRAND_DARK} !important; } body { padding-top: 28px !important; }`
+      ).catch(() => {});
+    }
+
+    // Only inject the auto-fill helper on the actual login page.
+    try {
+      const currentUrl = new URL(mainWindow.webContents.getURL());
+      if (currentUrl.pathname === '/login') {
+        mainWindow.webContents.executeJavaScript(AUTOFILL_SCRIPT).catch(() => {});
+      }
+    } catch (e) {
+      // ignore
+    }
+  });
 
   // Any attempt to navigate the main window to a URL outside our own
   // domain (e.g. a phishing redirect) is blocked. This is the "secure
@@ -102,6 +223,15 @@ function buildMenu() {
             const ses = session.fromPartition(SESSION_PARTITION);
             await ses.clearStorageData();
             mainWindow.loadURL(APP_URL);
+          }
+        },
+        { label: 'Forget saved login', click: () => {
+            forgetSavedLoginCredentials();
+            dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              title: 'Forecourt 360',
+              message: 'Saved login has been forgotten on this device.',
+            });
           }
         },
         { type: 'separator' },

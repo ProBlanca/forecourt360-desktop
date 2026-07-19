@@ -15,13 +15,15 @@ Developer account, code signing, or notarization used anywhere.
 
 ```
 desktop-app/
-  main.js               Electron main process (creates the window, security rules, auto-update)
-  preload.js            Empty security boundary (contextIsolation on, nothing exposed to the page)
+  main.js               Electron main process (window, security rules, title bar, auto-fill, auto-update)
+  preload.js            Narrow security bridge (only exposes the login auto-fill helper, nothing else)
   package.json           App config + electron-builder build settings
   build/
-    icon.png             512x512 source icon (used on Linux/taskbar)
+    icon_master.png       Source icon - the real Forecourt 360 logo (from public/images/logo.png)
+    icon.png             512x512 icon (used on Linux/taskbar)
     icon.ico             Windows icon (generated, 7 sizes: 16-256px)
     icon.icns            Mac icon (generated, 16-1024px)
+    afterSign.js          Free ad-hoc code-signing hook (avoids the Mac "app is damaged" message)
   .github/workflows/build.yml   Free CI that builds the .exe and .dmg automatically
 ```
 
@@ -39,6 +41,33 @@ desktop-app/
   exactly like a browser tab.
 - File > "Log out / Clear session" in the app menu wipes the local cookie
   store if a shared computer needs a clean slate.
+
+### Login auto-fill
+
+Electron doesn't ship Chrome's built-in "save password" feature — that's a
+Google-proprietary service tied to a Google API key, not part of open-source
+Chromium/Electron, so there's no free way to get the exact same one-click
+"save password?" browser prompt. Instead, this app has its own free
+equivalent: when you submit the login form, the email, station number, and
+password are encrypted with `safeStorage` (Electron's wrapper around the
+OS's own secure storage — Keychain on Mac, DPAPI on Windows) and saved to a
+local file on that machine only. Next time the login page loads, those
+fields are automatically filled in. Nothing is ever sent anywhere except to
+`omelfms.com` itself when you actually submit the form.
+
+To clear a saved login on a shared computer: File > "Forget saved login".
+
+### Title bar / window chrome
+
+- The window title always reads "Forecourt 360", regardless of what
+  `<title>` the current page sets (the FMS pages set their own per-page
+  titles like "Omel Fms — Admin", which used to leak into the title bar).
+- On Mac, the separate light-gray title bar strip is removed
+  (`titleBarStyle: 'hiddenInset'`) so the traffic-light buttons sit directly
+  over the app's own dark header instead of a mismatched bar above it, and
+  the window background is set to the FMS brand's own navy (`#0f172a`) so
+  there's no color seam. This only applies on Mac; Windows keeps its normal
+  title bar since it wasn't reported as an issue there.
 
 ## Prerequisites (only needed if building yourself, not for end users)
 
